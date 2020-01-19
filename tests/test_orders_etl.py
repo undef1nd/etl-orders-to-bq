@@ -1,14 +1,15 @@
-from pandas import np
-from etl.orders_etl import OrdersEtl
 import pandas as pd
+from pandas import np
+
+from etl.orders_etl import OrdersEtl
 
 
-class MockEtl(OrdersEtl):
-    def __init__(self):
-        pass
-
-
-test_orders_etl = MockEtl()
+test_orders_etl = OrdersEtl(
+    orders_csv="./unknown.csv",
+    products_csv="./unknown.csv",
+    bq_table_name="none.none",
+    bq_project_id="none",
+)
 
 
 def test_convert_orders_types():
@@ -42,7 +43,9 @@ def test_convert_orders_types():
         "object",
         "int64",
     ]
-    actual_orders_dtypes = test_orders_etl.cast_orders_types(orders_df).dtypes.to_list()
+    actual_orders_dtypes = test_orders_etl._cast_orders_types(
+        orders_df
+    ).dtypes.to_list()
     actual_orders_dtypes = list(map(str, actual_orders_dtypes))
     assert expected_order_data_types == actual_orders_dtypes
 
@@ -63,7 +66,7 @@ def test_convert_products_types():
     )
 
     expected_products_data_types = ["int64", "float64", "category", "category"]
-    actual_products_dtypes = test_orders_etl.cast_products_types(
+    actual_products_dtypes = test_orders_etl._cast_products_types(
         products_df
     ).dtypes.to_list()
     actual_products_dtypes = list(map(str, actual_products_dtypes))
@@ -86,19 +89,19 @@ def test_clean_named():
         ]
     )
     expected_result = [
-            "olena",
-            "",
-            "в'ячеславівна",
-            "",
-            "мар'яна",
-            "кіт",
-            "",
-            "",
-            "",
-            "іванова-шипак",
-        ]
-    actual_result = test_orders_etl.clean_names(names).to_list()
-    assert(expected_result == actual_result)
+        "olena",
+        "",
+        "в'ячеславівна",
+        "",
+        "мар'яна",
+        "кіт",
+        "",
+        "",
+        "",
+        "іванова-шипак",
+    ]
+    actual_result = test_orders_etl._clean_names(names).to_list()
+    assert expected_result == actual_result
 
 
 def test_join_frames():
@@ -138,7 +141,7 @@ def test_join_frames():
         }
     )
 
-    actual_df = test_orders_etl.join_frames(orders_df, products_df)
+    actual_df = test_orders_etl._join_frames(orders_df, products_df)
     pd.testing.assert_frame_equal(expected_df, actual_df)
 
 
@@ -146,22 +149,20 @@ def test_find_similar_products():
     test_orders_etl.products_df = pd.DataFrame(
         {
             "product_id": [
-                34556,
-                59690,
-                33454,
-                56332,
-                54323,
-                56788,
-                1111,
-                334234,
-                435632,
+                536469,
+                296597,
+                385613,
+                516423,
+                516425,
+                427227,
+                439541,
+                528462,
             ],
-            "price": [45, 56.55, 10, 13.50, 1800, 300, 350, 1870, 500],
+            "price": [749.0, 199.0, 199.0, 219.0, 299.0, 329.0, 810.0, 219.0],
             "goods_group": [
-                "Творчість та канцтовари",
-                "Творчість та канцтовари",
+                "Для активного відпочинку",
+                "Дитячі машинки",
                 "Ігрові фігурки",
-                "Іграшки для розвитку",
                 "Дитячі машинки",
                 "Дитячі машинки",
                 "Дитячі машинки",
@@ -169,21 +170,31 @@ def test_find_similar_products():
                 "Дитячі машинки",
             ],
             "manufacturer": [
-                "BIC",
-                "BIC",
-                "Bingo",
-                "Hama",
-                "CAT",
-                "MZ",
-                "CAT",
-                "CAT",
-                "MZ",
+                "Bugs",
+                "CARS",
+                "CARS",
+                "CARS",
+                "CARS",
+                "LENA",
+                "LENA",
+                "LENA",
             ],
         }
     )
 
-    expected_product_ids = [334234, 435632, 1111, 56788, 33454, 34556]
-    actual_product_ids = test_orders_etl.find_similar_products(
-        target_id=54323, candidate_ids=[33454, 334234, 34556, 1111, 56788, 435632]
+    expected_candidate_scores = {
+        536469: 0.08772,
+        296597: 0.9726,
+        385613: 0.4726,
+        516423: 1,
+        516425: 0.91973,
+        427227: 0.6997,
+        439541: 0.58111,
+        528462: 0.8,
+    }
+
+    actual_candidate_scores = test_orders_etl.find_similar_products(
+        target_id=516423,
+        candidate_ids=[536469, 296597, 385613, 516423, 516425, 427227, 439541, 528462],
     )
-    assert expected_product_ids == actual_product_ids
+    assert expected_candidate_scores == actual_candidate_scores

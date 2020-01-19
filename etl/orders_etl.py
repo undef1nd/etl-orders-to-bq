@@ -67,30 +67,33 @@ class OrdersEtl:
         self.products_df = None
         self.orders_df = None
 
-    def run(self):
-        """Class entry point that executes the logic."""
-        orders = pd.read_csv(self.orders_csv, usecols=self.READ_SCHEMA.get('orders'))
-        products = pd.read_csv(self.products_csv, usecols=self.READ_SCHEMA.get('products'))
+    def process(self):
+        """Class entry point that executes its processing logic."""
+        orders = pd.read_csv(self.orders_csv, usecols=self.READ_SCHEMA.get("orders"))
+        products = pd.read_csv(
+            self.products_csv, usecols=self.READ_SCHEMA.get("products")
+        )
 
-        self.orders_df = self.cast_orders_types(orders).drop_duplicates(
+        self.orders_df = self.__cast_orders_types(orders).drop_duplicates(
             subset=["order_source_id", "product_id"], keep="first"
         )
         self.orders_df.loc[:, ["name", "surname", "patronymic"]] = self.orders_df[
             ["name", "surname", "patronymic"]
-        ].apply(self.clean_names, axis=0)
-        self.products_df = self.cast_products_types(products).drop_duplicates(
+        ].apply(self.__clean_names, axis=0)
+        self.products_df = self.__cast_products_types(products).drop_duplicates(
             subset="product_id", keep="first"
         )
-        self.output_df = self.join_frames(
+        self.output_df = self.__join_frames(
             orders_df=self.orders_df, products_df=self.products_df
         )
 
+    def write_to_bq(self):
         bq_client = BqClient(project_id=self.bq_project_id)
         bq_client.upload(table_name=self.bq_table_name, df=self.output_df)
 
     def find_similar_products(
-        self, target_id: int, candidate_ids: List[int]
-    ) -> Dict[int, int]:
+        self, target_id: int, candidate_ids: List[int],
+    ) -> Dict[int, float]:
         """
         Scores candidate products based on their similarity to the target product.
 
@@ -98,9 +101,47 @@ class OrdersEtl:
         :param candidate_ids: List of products IDs that need to be scored.
         :return: Dict of candidate product IDs and their scores.
         """
-        pass
 
-    def cast_orders_types(self, orders_df: DataFrame) -> DataFrame:
+        def score(candidate_product_row: Dict) -> float:
+            price = candidate_product_row.get("price")
+            goods_group = candidate_product_row.get("goods_group")
+            manufacturer = candidate_product_row.get("manufacturer")
+
+            score = 0
+
+            if target_goods_group == goods_group:
+                score += 0.5
+            if target_manufacturer == manufacturer:
+                score += 0.2
+
+            price_score = (
+                1 - abs(target_price - price) / max(target_price, price)
+            ) * 0.3
+            score += price_score
+            return round(score, 5)
+
+        target_product_row = self.products_df.loc[
+            self.products_df.product_id == target_id,
+            ["price", "goods_group", "manufacturer"],
+        ].to_dict("records")[0]
+        (
+            target_price,
+            target_goods_group,
+            target_manufacturer,
+        ) = target_product_row.values()
+
+        candidate_product_rows = self.products_df.loc[
+            self.products_df.product_id.isin(candidate_ids),
+            ["product_id", "price", "goods_group", "manufacturer"],
+        ].to_dict("record")
+
+        scored_products = {
+            candidate.get("product_id"): score(candidate)
+            for candidate in candidate_product_rows
+        }
+        return scored_products
+
+    def _cast_orders_types(self, orders_df: DataFrame) -> DataFrame:
         """
         Casts DataFrame types to the ones described with SCHEMA.
 
@@ -114,7 +155,7 @@ class OrdersEtl:
         orders_df = orders_df.astype(self.TYPES_SCHEMA.get("orders"))
         return orders_df
 
-    def cast_products_types(self, products_df: DataFrame) -> DataFrame:
+    def _cast_products_types(self, products_df: DataFrame) -> DataFrame:
         """
         Casts DataFrame types to the ones described with SCHEMA.
 
@@ -124,7 +165,7 @@ class OrdersEtl:
         products_df = products_df.astype(self.TYPES_SCHEMA.get("products"))
         return products_df
 
-    def clean_names(self, df_column: Series) -> Series:
+    def _clean_names(self, df_column: Series) -> Series:
         """
         Cleans any of name/surname/patronymic column.
 
@@ -145,7 +186,7 @@ class OrdersEtl:
         )
         return cleaned_column
 
-    def join_frames(self, orders_df: DataFrame, products_df: DataFrame) -> DataFrame:
+    def _join_frames(self, orders_df: DataFrame, products_df: DataFrame) -> DataFrame:
         """Left joins Products DataFrame to Orders DataFrame"""
         return orders_df.merge(
             products_df, how="left", left_on="product_id", right_on="product_id"
@@ -159,4 +200,9 @@ if __name__ == "__main__":
         bq_project_id="neu-current",
         bq_table_name="orders.orders_denormalized",
     )
-    orders_uploader.run()
+    orders_uploader.process()
+    # orders_uploader.write_to_bq()
+    orders_uploader.find_similar_products(
+        target_id=516423,
+        candidate_ids=[536469, 296597, 385613, 516423, 516425, 427227, 439541, 528462],
+    )
