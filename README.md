@@ -5,13 +5,14 @@
 An output should be one table in BigQuery with clean data for each order and all product attributes from the products file.
 
 2. 	Make a function that takes two parameters:
-    * target product_id,
-    * list of candidate product_ids as input
-
-	Calculates and returns similarity of target id to a given list of candidate ids.
+   
+        * target product_id,
+        * list of candidate product_ids as input
+        
+        Calculates and returns similarity of target id to a given list of candidate ids.
 Defining what is "similarity" between products is part of the task. Hint: use product attributes or orders. 
 
-	Choose one task from (3) or (4) to implement:
+        Choose one task from (3) or (4) to implement:
 
 3. Write unit tests for tasks above, docstrings for implemented functions
 
