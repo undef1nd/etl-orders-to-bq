@@ -14,7 +14,23 @@ class OrdersEtl:
     Cleans, normalizes and merges two data sets into a single one prior to loading.
     """
 
-    SCHEMA = {
+    READ_SCHEMA = {
+        "products": ["product_id", "price", "goods_group", "manufacturer"],
+        "orders": [
+            "order_source_id",
+            "order_created_datetime",
+            "customer_id",
+            "status",
+            "sum",
+            "quantity",
+            "name",
+            "surname",
+            "patronymic",
+            "product_id",
+        ],
+    }
+
+    TYPES_SCHEMA = {
         "orders": {
             "order_created_datetime": "datetime64[ns]",
             "status": "category",
@@ -53,8 +69,9 @@ class OrdersEtl:
 
     def run(self):
         """Class entry point that executes the logic."""
-        orders = pd.read_csv(self.orders_csv, index_col=0)
-        products = pd.read_csv(self.products_csv)
+        orders = pd.read_csv(self.orders_csv, usecols=self.READ_SCHEMA.get('orders'))
+        products = pd.read_csv(self.products_csv, usecols=self.READ_SCHEMA.get('products'))
+
         self.orders_df = self.cast_orders_types(orders).drop_duplicates(
             subset=["order_source_id", "product_id"], keep="first"
         )
@@ -94,7 +111,7 @@ class OrdersEtl:
         orders_df.loc[:, "product_id"] = orders_df.product_id.str.replace(
             r"\D", "", regex=True
         )
-        orders_df = orders_df.astype(self.SCHEMA.get("orders"))
+        orders_df = orders_df.astype(self.TYPES_SCHEMA.get("orders"))
         return orders_df
 
     def cast_products_types(self, products_df: DataFrame) -> DataFrame:
@@ -104,7 +121,7 @@ class OrdersEtl:
         :param products_df: Products DataFrame to be casted.
         :return: Casted Products DataFrame.
         """
-        products_df = products_df.astype(self.SCHEMA.get("products"))
+        products_df = products_df.astype(self.TYPES_SCHEMA.get("products"))
         return products_df
 
     def clean_names(self, df_column: Series) -> Series:
