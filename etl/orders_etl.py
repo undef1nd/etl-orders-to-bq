@@ -74,16 +74,16 @@ class OrdersEtl:
             self.products_csv, usecols=self.READ_SCHEMA.get("products")
         )
 
-        self.orders_df = self.__cast_orders_types(orders).drop_duplicates(
+        self.orders_df = self._cast_orders_types(orders).drop_duplicates(
             subset=["order_source_id", "product_id"], keep="first"
         )
         self.orders_df.loc[:, ["name", "surname", "patronymic"]] = self.orders_df[
             ["name", "surname", "patronymic"]
-        ].apply(self.__clean_names, axis=0)
-        self.products_df = self.__cast_products_types(products).drop_duplicates(
+        ].apply(self._clean_names, axis=0)
+        self.products_df = self._cast_products_types(products).drop_duplicates(
             subset="product_id", keep="first"
         )
-        self.output_df = self.__join_frames(
+        self.output_df = self._join_frames(
             orders_df=self.orders_df, products_df=self.products_df
         )
 
@@ -201,8 +201,9 @@ if __name__ == "__main__":
         bq_table_name="orders.orders_denormalized",
     )
     orders_uploader.process()
-    # orders_uploader.write_to_bq()
-    orders_uploader.find_similar_products(
+    orders_uploader.write_to_bq()
+    similarity = orders_uploader.find_similar_products(
         target_id=516423,
         candidate_ids=[536469, 296597, 385613, 516423, 516425, 427227, 439541, 528462],
     )
+    print(similarity)
