@@ -1,5 +1,5 @@
 # orders-to-bq
-###Tasks:
+### Tasks:
 
 1. Export data from csv files to BigQuey using python. Filter and process user data in orders, bring names, surnames to unique form, remove duplicates. 
 An output should be one table in BigQuery with clean data for each order and all product attributes from the products file.
