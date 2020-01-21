@@ -68,7 +68,7 @@ class OrdersEtl:
         self.orders_df = None
 
     def process(self):
-        """Class entry point that executes its processing logic."""
+        """Class entry point that executes processing logic of the class."""
         orders = pd.read_csv(self.orders_csv, usecols=self.READ_SCHEMA.get("orders"))
         products = pd.read_csv(
             self.products_csv, usecols=self.READ_SCHEMA.get("products")
@@ -87,13 +87,11 @@ class OrdersEtl:
             orders_df=self.orders_df, products_df=self.products_df
         )
 
-    def write_to_bq(self):
+    def write_to_bq(self, **kwargs):
         bq_client = BqClient(project_id=self.bq_project_id)
-        bq_client.upload(table_name=self.bq_table_name, df=self.output_df)
+        bq_client.upload(table_name=self.bq_table_name, df=self.output_df, **kwargs)
 
-    def find_similar_products(
-        self, target_id: int, candidate_ids: List[int],
-    ) -> Dict[int, float]:
+    def find_similar_products(self, target_id: int, candidate_ids: List[int]) -> Dict[int, float]:
         """
         Scores candidate products based on their similarity to the target product.
 
@@ -101,34 +99,10 @@ class OrdersEtl:
         :param candidate_ids: List of products IDs that need to be scored.
         :return: Dict of candidate product IDs and their scores.
         """
-
-        def score(candidate_product_row: Dict) -> float:
-            price = candidate_product_row.get("price")
-            goods_group = candidate_product_row.get("goods_group")
-            manufacturer = candidate_product_row.get("manufacturer")
-
-            score = 0
-
-            if target_goods_group == goods_group:
-                score += 0.5
-            if target_manufacturer == manufacturer:
-                score += 0.2
-
-            price_score = (
-                1 - abs(target_price - price) / max(target_price, price)
-            ) * 0.3
-            score += price_score
-            return round(score, 5)
-
         target_product_row = self.products_df.loc[
             self.products_df.product_id == target_id,
             ["price", "goods_group", "manufacturer"],
         ].to_dict("records")[0]
-        (
-            target_price,
-            target_goods_group,
-            target_manufacturer,
-        ) = target_product_row.values()
 
         candidate_product_rows = self.products_df.loc[
             self.products_df.product_id.isin(candidate_ids),
@@ -136,10 +110,41 @@ class OrdersEtl:
         ].to_dict("record")
 
         scored_products = {
-            candidate.get("product_id"): score(candidate)
+            candidate.get("product_id"): self.__score(target_product_row, candidate)
             for candidate in candidate_product_rows
         }
         return scored_products
+
+    def __score(self, target_prod_row: Dict, candidate_product_row: Dict) -> float:
+        """Calculates similarity score for each candidate product.
+
+       :param target_prod_row: Dict of target product attributes
+       :param candidate_product_row: Dict of candidate product attributes
+       :return:
+        """
+
+        MANUFACTURER_WEIGHT = 0.3
+        PRICE_WEIGHT = 0.2
+        GROUP_WEIGHT = 0.5
+
+        target_price, target_goods_group, target_manufacturer = target_prod_row.values()
+
+        price = candidate_product_row.get("price")
+        goods_group = candidate_product_row.get("goods_group")
+        manufacturer = candidate_product_row.get("manufacturer")
+
+        score = 0
+
+        if target_goods_group == goods_group:
+            score += GROUP_WEIGHT
+        if target_manufacturer == manufacturer:
+            score += PRICE_WEIGHT
+
+        price_score = (
+            1 - abs(target_price - price) / max(target_price, price)
+        ) * MANUFACTURER_WEIGHT
+        score += price_score
+        return round(score, 5)
 
     def _cast_orders_types(self, orders_df: DataFrame) -> DataFrame:
         """
@@ -191,19 +196,3 @@ class OrdersEtl:
         return orders_df.merge(
             products_df, how="left", left_on="product_id", right_on="product_id"
         )
-
-
-if __name__ == "__main__":
-    orders_uploader = OrdersEtl(
-        orders_csv="./input_data/orders_s.csv",
-        products_csv="./input_data/products_s.csv",
-        bq_project_id="neu-current",
-        bq_table_name="orders.orders_denormalized",
-    )
-    orders_uploader.process()
-    orders_uploader.write_to_bq()
-    similarity = orders_uploader.find_similar_products(
-        target_id=516423,
-        candidate_ids=[536469, 296597, 385613, 516423, 516425, 427227, 439541, 528462],
-    )
-    print(similarity)
