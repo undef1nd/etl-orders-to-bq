@@ -6,7 +6,7 @@ class BqClient:
     """
     Wrapper around pandas_gbq to interact with Google BigQuery.
 
-    By default client uses credentials specified in GOOGLE_APPLICATION_CREDENTIALS env variable.
+    Uses credentials specified in GOOGLE_APPLICATION_CREDENTIALS env variable.
     """
 
     def __init__(self, project_id):
@@ -17,7 +17,7 @@ class BqClient:
         """
         self.project_id = project_id
 
-    def upload(self, table_name: str, df: DataFrame):
+    def upload(self, table_name: str, df: DataFrame, **kwargs):
         """
         Writes DataFrame to Google BigQuery.
 
@@ -25,5 +25,8 @@ class BqClient:
         :param df: DataFrame to be written to a Google BigQuery table.
         """
         pandas_gbq.to_gbq(
-            project_id=self.project_id, dataframe=df, destination_table=table_name
+            project_id=self.project_id,
+            dataframe=df,
+            destination_table=table_name,
+            **kwargs
         )
